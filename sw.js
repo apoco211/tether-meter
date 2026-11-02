@@ -1,5 +1,5 @@
 const CACHE_NAME = 'tether-meter-v1.0';
-const urlsToCache = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
+const urlsToCache = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => {
   self.skipWaiting();
   e.waitUntil(caches.open(CACHE_NAME).then(c => c.addAll(urlsToCache)));
