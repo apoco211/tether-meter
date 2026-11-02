@@ -1,0 +1,16 @@
+name: Build A25 APK
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: 'temurin', java-version: '17' }
+      - name: Build APK
+        working-directory: ./a25-reporter
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug
+      - uses: actions/upload-artifact@v4
+        with: { name: a25-reporter-apk, path: a25-reporter/app/build/outputs/apk/debug/*.apk }
