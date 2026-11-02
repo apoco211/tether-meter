@@ -1,12 +1,12 @@
 {
   "name": "tether-meter",
   "short_name": "tether-meter",
-  "description": "tether-meter - 📡 #0284c7 테마",
+  "description": "tether-meter - ✨ #10b981 테마",
   "start_url": "./index.html",
   "display": "standalone",
   "scope": "./",
   "background_color": "#ffffff",
-  "theme_color": "#0284c7",
+  "theme_color": "#10b981",
   "icons": [
     {
       "src": "./icon-192.png",
