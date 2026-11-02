@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>tether-meter 📡</title>
+<meta name="theme-color" content="#0284c7">
+<link rel="manifest" href="./manifest.json?v=8.9.114">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png?v=8.9.114">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png?v=8.9.114">
+<style>
+  body { margin:0; font-family: -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:#fff; color:#111; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; text-align:center; }
+  .icon { width:120px; height:120px; background:#0284c7; border-radius:28px; display:flex; align-items:center; justify-content:center; font-size:64px; box-shadow:0 8px 24px rgba(0,0,0,0.15); }
+  h1 { margin:24px 0 8px; font-size:28px; font-weight:900; }
+  p { opacity:0.6; font-size:14px; }
+  .badge { margin-top:16px; padding:6px 12px; background:#0284c7; color:#fff; border-radius:999px; font-size:12px; font-weight:700; }
+</style>
+</head>
+<body>
+<div class="icon">📡</div>
+<h1>tether-meter</h1>
+<p>AI가 생성한 PWA 앱 - v8.9.114</p>
+<div class="badge">#0284c7 📡</div>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').then(r=>console.log('SW ok', r.scope)).catch(e=>console.log('SW fail', e)));
+}
+</script>
+</body>
+</html>
