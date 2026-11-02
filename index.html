@@ -22,7 +22,7 @@ h1{font-size:11px;letter-spacing:3px;color:var(--muted);margin:8px 0 14px}
 .tab-content{display:none;width:100%;max-width:380px;flex-direction:column;align-items:center}
 .tab-content.active{display:flex}
 
-/* 게이지 */
+/* 원형 게이지 */
 .gauge-wrap{position:relative;width:290px;height:290px;margin:10px 0}
 svg{transform:rotate(-90deg);width:100%;height:100%}
 .bg{fill:none;stroke:var(--gauge-bg);stroke-width:18}
@@ -42,6 +42,7 @@ button.action-btn{width:100%;padding:14px;border:0;border-radius:12px;font-weigh
 .btn-dark{background:var(--card);color:var(--text);border:1px solid var(--card-b)}
 small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height:1.5}
 .log{font-size:11px;color:var(--muted);text-align:center;margin-top:10px;white-space:pre-wrap;line-height:1.5}
+.badge{display:inline-block;background:#2563eb;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:6px}
 </style>
 
 <!-- Firebase SDK -->
@@ -60,6 +61,7 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
 
 <!-- 1. 모니터 탭 -->
 <div id="tabMonitor" class="tab-content active">
+  <span id="monthBadge" class="badge">--월 측정</span>
   <div class="gauge-wrap">
     <svg viewBox="0 0 200 200">
       <circle class="bg" cx="100" cy="100" r="85"></circle>
@@ -67,7 +69,7 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
     </svg>
     <div class="center">
       <div id="big" class="big">--<span class="unit">GB</span></div>
-      <div id="sub" class="sub">데이터 대기중</div>
+      <div id="sub" class="sub">데이터 수신 대기중</div>
     </div>
   </div>
   <div class="card">
@@ -85,16 +87,17 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
     <input id="cfgApiKey" placeholder="AIzaSy...">
     <label>Project ID (선택)</label>
     <input id="cfgProjectId" placeholder="my-project-id">
-    <small>Firebase 콘솔 > 프로젝트 설정 또는 Realtime Database의 URL을 입력합니다.</small>
+    <small>Firebase 콘솔의 Realtime Database 주소를 입력합니다.</small>
   </div>
 
   <div class="card">
-    <h2>⚖️ 용량 및 보정 설정</h2>
+    <h2>⚖️ 용량 및 월별 보정 설정</h2>
     <label>총 제공 용량 (GB)</label>
-    <input id="cfgTotal" type="number" inputmode="decimal" placeholder="30">
-    <label>오차 보정량 (GB) - 사용한 만큼 뺄 때 마이너스(-) 입력</label>
-    <input id="cfgOffset" type="number" inputmode="decimal" placeholder="예: -1.5">
-    <small>A25 측정 원본 잔량에 이 보정값이 합산되어 모니터에 표시됩니다.</small>
+    <input id="cfgTotal" type="number" inputmode="decimal" placeholder="80">
+    
+    <label>이번 달 이미 사용한 테더링량 (GB) - 양수 입력</label>
+    <input id="cfgOffset" type="number" inputmode="decimal" placeholder="예: 5.5">
+    <small>💡 <strong>매월 1일 00:00 자동 리셋:</strong> 새로운 달이 시작되면 기사용량 보정값과 A25 집계가 0으로 자동 초기화됩니다.</small>
 
     <button id="saveBtn" class="action-btn btn-white" onclick="saveSettings()">설정 저장 및 연결</button>
     <div id="cfgLog" class="log"></div>
@@ -107,6 +110,12 @@ const $ = id => document.getElementById(id);
 const getParam = k => new URLSearchParams(location.search).get(k);
 
 let currentFirebaseApp = null;
+
+// 현재 월 키 반환 (YYYY-MM)
+function getCurrentMonthKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
 
 // 탭 전환
 function switchTab(tab) {
@@ -123,23 +132,42 @@ function switchTab(tab) {
   }
 }
 
+// 당월 보정값(기사용량) 조회: 달이 바뀌면 자동으로 0으로 리셋
+function getMonthlyOffset() {
+  const currentMonth = getCurrentMonthKey();
+  const savedMonth = localStorage.getItem('tether_offset_month');
+
+  if (savedMonth && savedMonth !== currentMonth) {
+    // 달이 바뀌었으므로 이전 달의 수동 보정값은 0으로 자동 리셋
+    localStorage.setItem('tether_offset_month', currentMonth);
+    localStorage.setItem('tether_offset', '0');
+    if ($('cfgOffset')) $('cfgOffset').value = '';
+    return 0;
+  }
+
+  return Math.abs(parseFloat(localStorage.getItem('tether_offset') || '0'));
+}
+
 // 화면 렌더링
-function upd(left, total, src) {
-  const offset = parseFloat(localStorage.getItem('tether_offset') || '0');
-  const originalLeft = parseFloat(left);
-  if (isNaN(originalLeft)) return;
+function renderGauge(a25Used, src) {
+  const currentMonth = getCurrentMonthKey();
+  $('monthBadge').textContent = `${new Date().getMonth() + 1}월 측정 (매월 1일 리셋)`;
 
-  const adjustedLeft = originalLeft + offset;
-  const maxTotal = parseFloat(total) || parseFloat(localStorage.getItem('tether_total') || '30');
+  const total = parseFloat(localStorage.getItem('tether_total') || '80');
+  const offset = getMonthlyOffset();
+  
+  const currentA25Used = parseFloat(a25Used) || 0;
+  const totalUsed = currentA25Used + offset;
+  const left = Math.max(0, total - totalUsed);
 
-  const pct = Math.max(0, Math.min(100, (adjustedLeft / maxTotal) * 100));
-  $('big').innerHTML = adjustedLeft.toFixed(1) + '<span class="unit">GB</span>';
-  $('sub').textContent = `${adjustedLeft.toFixed(1)}GB 남음 / ${maxTotal}GB (${Math.round(pct)}%)`;
+  const pct = Math.max(0, Math.min(100, (left / total) * 100));
+  $('big').innerHTML = left.toFixed(1) + '<span class="unit">GB</span>';
+  $('sub').textContent = `${left.toFixed(1)}GB 남음 / ${total}GB (${Math.round(pct)}%)`;
   $('fg').style.strokeDashoffset = CIRC * (1 - pct / 100);
   $('fg').style.stroke = pct < 15 ? '#ef4444' : pct < 30 ? '#f59e0b' : 'var(--gauge-fg)';
 
-  localStorage.setItem('tether_left', originalLeft);
-  $('log').textContent = `[${src}] 보정: ${offset >= 0 ? '+' : ''}${offset}GB\n${new Date().toLocaleTimeString('ko-KR')} 갱신됨`;
+  localStorage.setItem('tether_a25_used', currentA25Used);
+  $('log').textContent = `[${src}] 당월 기사용 차감: -${offset.toFixed(1)}GB (총 사용량: ${totalUsed.toFixed(1)}GB)\n${new Date().toLocaleTimeString('ko-KR')} 갱신됨`;
 }
 
 // Firebase 연결
@@ -176,12 +204,22 @@ function initAndListen(config) {
     db.ref('tethering').on('value', snapshot => {
       const val = snapshot.val();
       if (val !== null && val !== undefined) {
-        const left = typeof val === 'object' ? (val.left ?? val.remain) : val;
-        const total = typeof val === 'object' ? val.total : null;
-        upd(left, total, 'Firebase 실시간');
+        let a25Used = 0;
+        if (typeof val === 'object') {
+          // 달이 일치하지 않는 예전 데이터인 경우 0으로 취급
+          const currentMonth = getCurrentMonthKey();
+          if (val.month && val.month !== currentMonth) {
+            a25Used = 0;
+          } else if (val.used !== undefined) {
+            a25Used = parseFloat(val.used) || 0;
+          } else if (val.left !== undefined && val.total !== undefined) {
+            a25Used = Math.max(0, parseFloat(val.total) - parseFloat(val.left));
+          }
+        }
+        renderGauge(a25Used, 'Firebase 실시간');
       }
     }, error => {
-      $('log').textContent = 'Firebase 읽기 실패 (규칙 확인 필요): ' + error.message;
+      $('log').textContent = 'Firebase 읽기 실패: ' + error.message;
     });
   } catch (e) {
     $('log').textContent = '연결 오류: ' + e.message;
@@ -193,25 +231,26 @@ function saveSettings() {
   const dbUrl = $('cfgDbUrl').value.trim();
   const apiKey = $('cfgApiKey').value.trim();
   const projId = $('cfgProjectId').value.trim();
-  const total = $('cfgTotal').value.trim() || '30';
-  const offset = $('cfgOffset').value.trim() || '0';
+  const total = $('cfgTotal').value.trim() || '80';
+  const offset = Math.abs(parseFloat($('cfgOffset').value.trim() || '0')).toString();
 
   localStorage.setItem('tether_fb_db_url', dbUrl);
   localStorage.setItem('tether_fb_api_key', apiKey);
   localStorage.setItem('tether_fb_proj_id', projId);
   localStorage.setItem('tether_total', total);
   localStorage.setItem('tether_offset', offset);
+  localStorage.setItem('tether_offset_month', getCurrentMonthKey());
 
   $('cfgLog').textContent = '✅ 설정이 저장되었습니다. 모니터를 갱신합니다.';
   connectFirebase();
 
-  const sl = localStorage.getItem('tether_left');
-  if (sl) upd(sl, total, '설정 변경');
+  const savedA25Used = localStorage.getItem('tether_a25_used') || 0;
+  renderGauge(savedA25Used, '설정 변경');
 
-  setTimeout(() => switchTab('monitor'), 800);
+  setTimeout(() => switchTab('monitor'), 600);
 }
 
-// 테마 토글
+// 테마 관리
 function applyTheme(t) {
   document.documentElement.setAttribute('data-theme', t);
   localStorage.setItem('tether_theme', t);
@@ -228,16 +267,17 @@ window.addEventListener('DOMContentLoaded', () => {
   $('cfgDbUrl').value = localStorage.getItem('tether_fb_db_url') || '';
   $('cfgApiKey').value = localStorage.getItem('tether_fb_api_key') || '';
   $('cfgProjectId').value = localStorage.getItem('tether_fb_proj_id') || '';
-  $('cfgTotal').value = localStorage.getItem('tether_total') || '30';
-  $('cfgOffset').value = localStorage.getItem('tether_offset') || '0';
-
-  const lp = getParam('left'), tp = getParam('total');
-  if (lp) {
-    upd(lp, tp || '30', 'URL 파라미터');
+  $('cfgTotal').value = localStorage.getItem('tether_total') || '80';
+  
+  // 저장된 월과 현재 월이 일치할 때만 보정값 표시
+  if (localStorage.getItem('tether_offset_month') === getCurrentMonthKey()) {
+    $('cfgOffset').value = localStorage.getItem('tether_offset') || '';
   } else {
-    const sl = localStorage.getItem('tether_left');
-    if (sl) upd(sl, localStorage.getItem('tether_total') || '30', '저장된 캐시');
+    $('cfgOffset').value = '';
   }
+
+  const savedA25Used = localStorage.getItem('tether_a25_used') || 0;
+  renderGauge(savedA25Used, '캐시 데이터');
 
   connectFirebase();
 });
