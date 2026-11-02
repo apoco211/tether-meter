@@ -4,6 +4,7 @@ import android.app.*
 import android.content.*
 import android.net.*
 import android.os.*
+import android.app.usage.NetworkStats
 import android.app.usage.NetworkStatsManager
 import org.json.JSONObject
 import java.net.URL
@@ -23,15 +24,11 @@ class ReporterService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val prefs = getSharedPreferences("tether", Context.MODE_PRIVATE)
-        
-        // 인텐트가 null(시스템 재시작)이더라도 저장된 설정값을 불러와 백그라운드 전송 유지
         val url = intent?.getStringExtra("url")?.takeIf { it.isNotBlank() } ?: prefs.getString("url", "") ?: ""
         val path = intent?.getStringExtra("path")?.takeIf { it.isNotBlank() } ?: prefs.getString("path", "/tethering") ?: "/tethering"
         val total = intent?.getStringExtra("total")?.toDoubleOrNull() ?: prefs.getString("total", "80")?.toDoubleOrNull() ?: 80.0
 
-        // 서비스 동작 상태 저장
         prefs.edit().putBoolean("is_running", true).apply()
-
         startForeground(1, buildNotification("모니터링 동작 중 (백그라운드)"))
 
         if (running) return START_STICKY
@@ -40,9 +37,7 @@ class ReporterService : Service() {
         worker = thread {
             while (running) {
                 try {
-                    // 매월 1일 00:00:00부터 현재까지의 사용량 집계
                     val used = queryMonthlyUsage()
-                    // 오늘 00:00:00부터 현재까지의 사용량 집계
                     val today = queryTodayUsage()
                     val left = (total - used).coerceAtLeast(0.0)
 
@@ -59,7 +54,10 @@ class ReporterService : Service() {
                     if (url.isNotBlank()) {
                         pushToFirebase(url, path, payload)
                     }
-                    updateNotification("📡 잔여 ${String.format("%.1f", left)}GB / ${total}GB (사용 ${String.format("%.1f", used)}GB)")
+
+                    val usedMb = used * 1024.0
+                    val usedStr = if (usedMb < 1000) String.format("%.0fMB", usedMb) else String.format("%.2fGB", used)
+                    updateNotification("📡 잔여 ${String.format("%.2f", left)}GB / ${total}GB (사용: $usedStr)")
                 } catch (e: Exception) {
                     updateNotification("오류: ${e.message}")
                 }
@@ -67,13 +65,6 @@ class ReporterService : Service() {
             }
         }
         return START_STICKY
-    }
-
-    /**
-     * 최근 앱(멀티태스킹 창)에서 앱을 스와이프해 지워도 서비스가 죽지 않도록 방어
-     */
-    override fun onTaskRemoved(rootIntent: Intent?) {
-        super.onTaskRemoved(rootIntent)
     }
 
     private fun getStartOfMonthMillis(): Long {
@@ -91,20 +82,49 @@ class ReporterService : Service() {
         return String.format("%04d-%02d", cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1)
     }
 
+    /**
+     * 당월 1일 00:00부터 현재까지의 테더링(핫스팟) 및 모바일 사용량 정밀 집계
+     */
     private fun queryMonthlyUsage(): Double {
         return try {
             val nsm = getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
             val startOfMonth = getStartOfMonthMillis()
-            val bucket = nsm.querySummaryForDevice(
-                ConnectivityManager.TYPE_MOBILE,
-                "",
-                startOfMonth,
-                System.currentTimeMillis()
-            )
-            val totalBytes = bucket.rxBytes + bucket.txBytes
+            val now = System.currentTimeMillis()
+            var totalBytes = 0L
+
+            // 1순위: 순수 핫스팟/테더링 전용 UID (-5: UID_TETHERING) 집계
+            try {
+                val stats = nsm.queryDetailsForUid(
+                    ConnectivityManager.TYPE_MOBILE,
+                    null, // "" 대신 반드시 null이어야 모든 유심/인터페이스를 포괄함
+                    startOfMonth,
+                    now,
+                    -5 // NetworkStats.Bucket.UID_TETHERING
+                )
+                val bucket = NetworkStats.Bucket()
+                while (stats.hasNextBucket()) {
+                    stats.getNextBucket(bucket)
+                    totalBytes += bucket.rxBytes + bucket.txBytes
+                }
+                stats.close()
+            } catch (e: Exception) {
+                // UID_TETHERING 조회가 지원되지 않는 제조사 커스텀 환경 대비
+            }
+
+            // 2순위: 기기 전체 모바일 트래픽 조회 (subscriberId = null 필수)
+            if (totalBytes == 0L) {
+                val bucket = nsm.querySummaryForDevice(
+                    ConnectivityManager.TYPE_MOBILE,
+                    null, // ""(빈값)을 넣으면 IMSI 매칭 실패로 0이 반환됨. null 필수!
+                    startOfMonth,
+                    now
+                )
+                totalBytes = bucket.rxBytes + bucket.txBytes
+            }
+
             totalBytes / (1024.0 * 1024 * 1024)
         } catch (e: Exception) {
-            parseProcNetDev()
+            0.0
         }
     }
 
@@ -119,30 +139,12 @@ class ReporterService : Service() {
             val nsm = getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
             val bucket = nsm.querySummaryForDevice(
                 ConnectivityManager.TYPE_MOBILE,
-                "",
+                null,
                 cal.timeInMillis,
                 System.currentTimeMillis()
             )
             val totalBytes = bucket.rxBytes + bucket.txBytes
             totalBytes / (1024.0 * 1024 * 1024)
-        } catch (e: Exception) {
-            0.0
-        }
-    }
-
-    private fun parseProcNetDev(): Double {
-        return try {
-            val file = java.io.File("/proc/net/dev").readText()
-            var total = 0L
-            file.lines().forEach { line ->
-                if (line.contains("rmnet") || line.contains("wlan1") || line.contains("ap0")) {
-                    val parts = line.trim().split(Regex("\\s+"))
-                    if (parts.size > 10) {
-                        total += (parts[1].toLongOrNull() ?: 0) + (parts[9].toLongOrNull() ?: 0)
-                    }
-                }
-            }
-            total / (1024.0 * 1024 * 1024).toDouble()
         } catch (e: Exception) {
             0.0
         }
