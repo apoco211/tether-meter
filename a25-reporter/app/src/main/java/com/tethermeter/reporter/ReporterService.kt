@@ -5,7 +5,6 @@ import android.content.*
 import android.net.*
 import android.os.*
 import android.app.usage.NetworkStatsManager
-import android.telephony.TelephonyManager
 import org.json.JSONObject
 import java.net.URL
 import java.util.Calendar
@@ -23,11 +22,17 @@ class ReporterService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        val url = intent?.getStringExtra("url") ?: ""
-        val path = intent?.getStringExtra("path") ?: "/tethering"
-        val total = intent?.getStringExtra("total")?.toDoubleOrNull() ?: 80.0
+        val prefs = getSharedPreferences("tether", Context.MODE_PRIVATE)
+        
+        // 인텐트가 null(시스템 재시작)이더라도 저장된 설정값을 불러와 백그라운드 전송 유지
+        val url = intent?.getStringExtra("url")?.takeIf { it.isNotBlank() } ?: prefs.getString("url", "") ?: ""
+        val path = intent?.getStringExtra("path")?.takeIf { it.isNotBlank() } ?: prefs.getString("path", "/tethering") ?: "/tethering"
+        val total = intent?.getStringExtra("total")?.toDoubleOrNull() ?: prefs.getString("total", "80")?.toDoubleOrNull() ?: 80.0
 
-        startForeground(1, buildNotification("모니터링 시작 - $url"))
+        // 서비스 동작 상태 저장
+        prefs.edit().putBoolean("is_running", true).apply()
+
+        startForeground(1, buildNotification("모니터링 동작 중 (백그라운드)"))
 
         if (running) return START_STICKY
         running = true
@@ -54,7 +59,7 @@ class ReporterService : Service() {
                     if (url.isNotBlank()) {
                         pushToFirebase(url, path, payload)
                     }
-                    updateNotification("📡 당월 잔여 ${String.format("%.1f", left)}GB / ${total}GB (사용 ${String.format("%.1f", used)}GB)")
+                    updateNotification("📡 잔여 ${String.format("%.1f", left)}GB / ${total}GB (사용 ${String.format("%.1f", used)}GB)")
                 } catch (e: Exception) {
                     updateNotification("오류: ${e.message}")
                 }
@@ -65,9 +70,12 @@ class ReporterService : Service() {
     }
 
     /**
-     * 당월 1일 00:00:00.000 타임스탬프 계산
-     * 매월 1일이 되는 순간 자동으로 시작 시점이 변경되어 사용량이 0GB로 리셋됩니다.
+     * 최근 앱(멀티태스킹 창)에서 앱을 스와이프해 지워도 서비스가 죽지 않도록 방어
      */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+    }
+
     private fun getStartOfMonthMillis(): Long {
         return Calendar.getInstance().apply {
             set(Calendar.DAY_OF_MONTH, 1)
@@ -87,7 +95,6 @@ class ReporterService : Service() {
         return try {
             val nsm = getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
             val startOfMonth = getStartOfMonthMillis()
-            // 당월 1일 0시부터 현재 시각까지 모바일 데이터 사용량 쿼리
             val bucket = nsm.querySummaryForDevice(
                 ConnectivityManager.TYPE_MOBILE,
                 "",
@@ -173,7 +180,7 @@ class ReporterService : Service() {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
         )
         return Notification.Builder(this, channelId)
-            .setContentTitle("Tether Reporter 동작중")
+            .setContentTitle("Tether Reporter 백그라운드 동작중")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.stat_sys_upload)
             .setContentIntent(pending)
@@ -189,6 +196,8 @@ class ReporterService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
+        val prefs = getSharedPreferences("tether", Context.MODE_PRIVATE)
+        prefs.edit().putBoolean("is_running", false).apply()
         running = false
         worker?.interrupt()
         super.onDestroy()
