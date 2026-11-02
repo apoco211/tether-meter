@@ -8,6 +8,7 @@ import android.app.usage.NetworkStatsManager
 import android.telephony.TelephonyManager
 import org.json.JSONObject
 import java.net.URL
+import java.util.Calendar
 import javax.net.ssl.HttpsURLConnection
 import kotlin.concurrent.thread
 
@@ -24,7 +25,7 @@ class ReporterService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val url = intent?.getStringExtra("url") ?: ""
         val path = intent?.getStringExtra("path") ?: "/tethering"
-        val total = intent?.getStringExtra("total")?.toDoubleOrNull() ?: 30.0
+        val total = intent?.getStringExtra("total")?.toDoubleOrNull() ?: 80.0
 
         startForeground(1, buildNotification("모니터링 시작 - $url"))
 
@@ -34,23 +35,26 @@ class ReporterService : Service() {
         worker = thread {
             while (running) {
                 try {
-                    val used = queryTetherUsage()
+                    // 매월 1일 00:00:00부터 현재까지의 사용량 집계
+                    val used = queryMonthlyUsage()
+                    // 오늘 00:00:00부터 현재까지의 사용량 집계
                     val today = queryTodayUsage()
                     val left = (total - used).coerceAtLeast(0.0)
-                    
+
                     val payload = JSONObject().apply {
                         put("used", used)
                         put("left", left)
                         put("total", total)
                         put("today", today)
+                        put("month", getCurrentMonthKey())
                         put("lastUpdate", System.currentTimeMillis())
                         put("device", "A25")
                     }
-                    
+
                     if (url.isNotBlank()) {
                         pushToFirebase(url, path, payload)
                     }
-                    updateNotification("📡 잔여 ${String.format("%.1f", left)}GB / ${total}GB (사용 ${String.format("%.1f", used)}GB)")
+                    updateNotification("📡 당월 잔여 ${String.format("%.1f", left)}GB / ${total}GB (사용 ${String.format("%.1f", used)}GB)")
                 } catch (e: Exception) {
                     updateNotification("오류: ${e.message}")
                 }
@@ -60,34 +64,62 @@ class ReporterService : Service() {
         return START_STICKY
     }
 
-    private fun queryTetherUsage(): Double {
+    /**
+     * 당월 1일 00:00:00.000 타임스탬프 계산
+     * 매월 1일이 되는 순간 자동으로 시작 시점이 변경되어 사용량이 0GB로 리셋됩니다.
+     */
+    private fun getStartOfMonthMillis(): Long {
+        return Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }.timeInMillis
+    }
+
+    private fun getCurrentMonthKey(): String {
+        val cal = Calendar.getInstance()
+        return String.format("%04d-%02d", cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1)
+    }
+
+    private fun queryMonthlyUsage(): Double {
         return try {
             val nsm = getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
-            // TYPE_MOBILE 전체 기간 집계 (단일 Bucket 반환)
-            val bucket = nsm.querySummaryForDevice(ConnectivityManager.TYPE_MOBILE, "", 0, System.currentTimeMillis())
+            val startOfMonth = getStartOfMonthMillis()
+            // 당월 1일 0시부터 현재 시각까지 모바일 데이터 사용량 쿼리
+            val bucket = nsm.querySummaryForDevice(
+                ConnectivityManager.TYPE_MOBILE,
+                "",
+                startOfMonth,
+                System.currentTimeMillis()
+            )
             val totalBytes = bucket.rxBytes + bucket.txBytes
             totalBytes / (1024.0 * 1024 * 1024)
         } catch (e: Exception) {
-            // fallback: /proc/net/dev 파싱
             parseProcNetDev()
         }
     }
 
     private fun queryTodayUsage(): Double {
-        // 오늘 0시부터 현재까지
-        val cal = java.util.Calendar.getInstance().apply { 
-            set(java.util.Calendar.HOUR_OF_DAY, 0)
-            set(java.util.Calendar.MINUTE, 0)
-            set(java.util.Calendar.SECOND, 0)
-            set(java.util.Calendar.MILLISECOND, 0)
+        val cal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
         }
         return try {
             val nsm = getSystemService(Context.NETWORK_STATS_SERVICE) as NetworkStatsManager
-            val bucket = nsm.querySummaryForDevice(ConnectivityManager.TYPE_MOBILE, "", cal.timeInMillis, System.currentTimeMillis())
+            val bucket = nsm.querySummaryForDevice(
+                ConnectivityManager.TYPE_MOBILE,
+                "",
+                cal.timeInMillis,
+                System.currentTimeMillis()
+            )
             val totalBytes = bucket.rxBytes + bucket.txBytes
             totalBytes / (1024.0 * 1024 * 1024)
-        } catch (e: Exception) { 
-            0.0 
+        } catch (e: Exception) {
+            0.0
         }
     }
 
@@ -104,8 +136,8 @@ class ReporterService : Service() {
                 }
             }
             total / (1024.0 * 1024 * 1024).toDouble()
-        } catch (e: Exception) { 
-            0.0 
+        } catch (e: Exception) {
+            0.0
         }
     }
 
@@ -121,7 +153,7 @@ class ReporterService : Service() {
         conn.readTimeout = 5000
         conn.doOutput = true
         conn.outputStream.use { it.write(json.toString().toByteArray()) }
-        conn.responseCode // HTTP 요청 실행 트리거
+        conn.responseCode
         conn.disconnect()
     }
 
@@ -134,7 +166,12 @@ class ReporterService : Service() {
 
     private fun buildNotification(text: String): Notification {
         val intent = Intent(this, MainActivity::class.java)
-        val pending = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val pending = PendingIntent.getActivity(
+            this,
+            0,
+            intent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         return Notification.Builder(this, channelId)
             .setContentTitle("Tether Reporter 동작중")
             .setContentText(text)
@@ -151,9 +188,9 @@ class ReporterService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    override fun onDestroy() { 
+    override fun onDestroy() {
         running = false
         worker?.interrupt()
-        super.onDestroy() 
+        super.onDestroy()
     }
 }
