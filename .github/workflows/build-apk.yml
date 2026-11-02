@@ -7,10 +7,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
         with: { distribution: 'temurin', java-version: '17' }
+      - uses: gradle/actions/setup-gradle@v3
+        with: { gradle-version: 8.4 }
       - name: Build APK
         working-directory: ./a25-reporter
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleDebug
+        run: gradle assembleDebug
       - uses: actions/upload-artifact@v4
         with: { name: a25-reporter-apk, path: a25-reporter/app/build/outputs/apk/debug/*.apk }
