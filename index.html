@@ -1,166 +1,246 @@
-<html lang="ko" data-theme="dark"><head><style>
-@font-face {
-  font-family: "Optimistic";
-  font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
-}
-@font-face {
-  font-family: "Optimistic Mono";
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
-}
-:where(html) {
-  font-family: "Optimistic", system-ui, sans-serif;
-}
-:where(code, pre, kbd, samp) {
-  font-family: "Optimistic Mono", ui-monospace, monospace;
-}
-</style>
+<!DOCTYPE html>
+<html lang="ko" data-theme="dark">
+<head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Tether Meter v3</title>
+<title>Tether Meter v1.4</title>
 <style>
 :root{--bg:#0a0a0a;--card:#151515;--card-b:#222;--text:#fff;--sub:#999;--muted:#666;--gauge-bg:#1a1a1a;--gauge-fg:#fff;--input-bg:#0a0a0a;--input-b:#2a2a2a;--btn-bg:#fff;--btn-c:#000}
 [data-theme="light"]{--bg:#f5f5f7;--card:#fff;--card-b:#e5e5ea;--text:#111;--sub:#666;--muted:#999;--gauge-bg:#e5e5ea;--gauge-fg:#111;--input-bg:#fff;--input-b:#d1d1d6;--btn-bg:#111;--btn-c:#fff}
 *{box-sizing:border-box;margin:0;padding:0}
 body{background:var(--bg);color:var(--text);font-family:-apple-system,system-ui;padding:20px;display:flex;flex-direction:column;align-items:center;min-height:100vh;transition:all 0.3s}
-h1{font-size:11px;letter-spacing:3px;color:var(--muted);margin:8px 0 16px}
-.gauge-wrap{position:relative;width:300px;height:300px}
+h1{font-size:11px;letter-spacing:3px;color:var(--muted);margin:8px 0 14px}
+#themeToggle{position:fixed;top:14px;right:14px;width:44px;height:44px;border-radius:50%;background:var(--card);border:1px solid var(--card-b);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;z-index:100}
+
+/* 탭 메뉴 */
+.tabs{display:flex;width:100%;max-width:380px;background:var(--card);border:1px solid var(--card-b);border-radius:14px;padding:4px;margin-bottom:16px}
+.tab-btn{flex:1;padding:10px;border:0;border-radius:10px;background:transparent;color:var(--sub);font-size:13px;font-weight:700;cursor:pointer;transition:all 0.2s}
+.tab-btn.active{background:var(--btn-bg);color:var(--btn-c)}
+
+/* 탭 컨텐츠 */
+.tab-content{display:none;width:100%;max-width:380px;flex-direction:column;align-items:center}
+.tab-content.active{display:flex}
+
+/* 게이지 */
+.gauge-wrap{position:relative;width:290px;height:290px;margin:10px 0}
 svg{transform:rotate(-90deg);width:100%;height:100%}
 .bg{fill:none;stroke:var(--gauge-bg);stroke-width:18}
 .fg{fill:none;stroke:var(--gauge-fg);stroke-width:18;stroke-linecap:round;transition:stroke-dashoffset 0.8s ease}
 .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
-.big{font-size:68px;font-weight:900;letter-spacing:-3px;line-height:1}
+.big{font-size:64px;font-weight:900;letter-spacing:-3px;line-height:1}
 .unit{font-size:18px;color:var(--sub)}
 .sub{font-size:13px;color:var(--sub);margin-top:6px;text-align:center}
-.card{background:var(--card);border:1px solid var(--card-b);border-radius:20px;padding:18px;width:100%;max-width:380px;margin-top:16px;transition:all 0.3s}
+
+/* 카드 및 폼 */
+.card{background:var(--card);border:1px solid var(--card-b);border-radius:20px;padding:18px;width:100%;margin-top:14px;transition:all 0.3s}
 .card h2{font-size:14px;margin-bottom:10px}
-label{font-size:11px;color:var(--sub);display:block;margin-bottom:6px}
-input{width:100%;padding:13px;background:var(--input-bg);border:1px solid var(--input-b);border-radius:12px;color:var(--text);font-size:15px;margin-bottom:10px}
-button{width:100%;padding:14px;border:0;border-radius:14px;font-weight:800;font-size:14px;cursor:pointer}
+label{font-size:11px;color:var(--sub);display:block;margin:10px 0 4px}
+input{width:100%;padding:12px;background:var(--input-bg);border:1px solid var(--input-b);border-radius:10px;color:var(--text);font-size:14px}
+button.action-btn{width:100%;padding:14px;border:0;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;margin-top:14px}
 .btn-white{background:var(--btn-bg);color:var(--btn-c)}
 .btn-dark{background:var(--card);color:var(--text);border:1px solid var(--card-b)}
-small{color:var(--muted);font-size:11px;display:block;margin-top:8px;line-height:1.5}
-#themeToggle{position:fixed;top:14px;right:14px;width:44px;height:44px;border-radius:50%;background:var(--card);border:1px solid var(--card-b);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer}
-.log{font-size:11px;color:var(--muted);text-align:center;margin-top:10px;white-space:pre-wrap}
+small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height:1.5}
+.log{font-size:11px;color:var(--muted);text-align:center;margin-top:10px;white-space:pre-wrap;line-height:1.5}
 </style>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
 <body>
 <button id="themeToggle">☀️</button>
-<h1>TETHER METER v3 AUTO</h1>
+<h1>TETHER METER v1.4</h1>
 
-<div class="gauge-wrap">
-<svg viewBox="0 0 200 200"><circle class="bg" cx="100" cy="100" r="85"></circle><circle id="fg" class="fg" cx="100" cy="100" r="85" stroke-dasharray="534" stroke-dashoffset="534"></circle></svg>
-<div class="center"><div id="big" class="big">--<span class="unit">GB</span></div><div id="sub" class="sub">U+ 자동 조회 대기</div></div>
+<!-- 상단 탭 버튼 -->
+<div class="tabs">
+  <button id="tabBtnMonitor" class="tab-btn active" onclick="switchTab('monitor')">📊 모니터</button>
+  <button id="tabBtnSettings" class="tab-btn" onclick="switchTab('settings')">⚙️ 설정</button>
 </div>
 
-<div class="card">
-<h2>🔐 U+ 로그인 (한번만, 기기에만 저장)</h2>
-<label>아이디</label><input id="uid" value="g12jeon@gmail.com">
-<label>비밀번호 (서버로 전송 안됨, 기기 localStorage에만)</label><input id="pw" type="password" placeholder="U+ 비밀번호">
-<button id="autoBtn" class="btn-white">⚡ U+ 잔량 자동 조회</button>
-<div id="log" class="log"></div>
-<small>비번은 절대 서버로 안가고, 이 기기 브라우저에만 저장. CORS 프록시로 U+ 조회 시도, 실패하면 수동 입력으로 전환</small>
+<!-- 1. 모니터 탭 -->
+<div id="tabMonitor" class="tab-content active">
+  <div class="gauge-wrap">
+    <svg viewBox="0 0 200 200">
+      <circle class="bg" cx="100" cy="100" r="85"></circle>
+      <circle id="fg" class="fg" cx="100" cy="100" r="85" stroke-dasharray="534" stroke-dashoffset="534"></circle>
+    </svg>
+    <div class="center">
+      <div id="big" class="big">--<span class="unit">GB</span></div>
+      <div id="sub" class="sub">데이터 대기중</div>
+    </div>
+  </div>
+  <div class="card">
+    <div id="log" class="log">연결 대기중...</div>
+  </div>
 </div>
 
-<div class="card">
-<h2>📶 수동 / URL</h2>
-<label>남은 용량 직접 입력</label><input id="left" placeholder="예: 12.3" type="number" inputmode="decimal">
-<button id="save" class="btn-dark">게이지 업데이트</button>
-<small>?left=12.3&amp;total=30 주소로도 자동 표시</small>
+<!-- 2. 설정 탭 -->
+<div id="tabSettings" class="tab-content">
+  <div class="card">
+    <h2>📡 Firebase 연동 설정</h2>
+    <label>Database URL (필수)</label>
+    <input id="cfgDbUrl" placeholder="https://xxx-default-rtdb.firebaseio.com">
+    <label>API Key (선택)</label>
+    <input id="cfgApiKey" placeholder="AIzaSy...">
+    <label>Project ID (선택)</label>
+    <input id="cfgProjectId" placeholder="my-project-id">
+    <small>Firebase 콘솔 > 프로젝트 설정 또는 Realtime Database의 URL을 입력합니다.</small>
+  </div>
+
+  <div class="card">
+    <h2>⚖️ 용량 및 보정 설정</h2>
+    <label>총 제공 용량 (GB)</label>
+    <input id="cfgTotal" type="number" inputmode="decimal" placeholder="30">
+    <label>오차 보정량 (GB) - 사용한 만큼 뺄 때 마이너스(-) 입력</label>
+    <input id="cfgOffset" type="number" inputmode="decimal" placeholder="예: -1.5">
+    <small>A25 측정 원본 잔량에 이 보정값이 합산되어 모니터에 표시됩니다.</small>
+
+    <button id="saveBtn" class="action-btn btn-white" onclick="saveSettings()">설정 저장 및 연결</button>
+    <div id="cfgLog" class="log"></div>
+  </div>
 </div>
 
 <script>
-const CIRC=2*Math.PI*85;
-const $=id=>document.getElementById(id);
-const getParam=k=>new URLSearchParams(location.search).get(k);
+const CIRC = 2 * Math.PI * 85;
+const $ = id => document.getElementById(id);
+const getParam = k => new URLSearchParams(location.search).get(k);
 
-function upd(left,total,src){
-  left=parseFloat(left); total=parseFloat(total)||30;
-  if(isNaN(left)) return;
-  const pct=Math.max(0,Math.min(100,(left/total)*100));
-  $('big').innerHTML=left.toFixed(1)+'<span class="unit">GB</span>';
-  $('sub').textContent=`${left}GB 남음 / ${total}GB (${Math.round(pct)}%)`;
-  $('fg').style.strokeDashoffset=CIRC*(1-pct/100);
-  $('fg').style.stroke=pct<15?'#ef4444':pct<30?'#f59e0b':'var(--gauge-fg)';
-  localStorage.setItem('tether_left',left);
-  localStorage.setItem('tether_total',total);
-  $('log').textContent=`출처: ${src} | ${new Date().toLocaleString('ko-KR')}`;
-}
+let currentFirebaseApp = null;
 
-$('save').onclick=()=>{
-  const l=$('left').value, t='30';
-  if(!l) return alert('남은 용량 입력');
-  upd(l,t,'수동 입력');
-  history.replaceState(null,'','?left='+l+'&total='+t);
-};
-
-// auto fetch - try CORS proxy
-$('autoBtn').onclick=async()=>{
-  const id=$('uid').value.trim(), pw=$('pw').value;
-  if(!id||!pw) return alert('아이디/비번 입력');
-  localStorage.setItem('uplus_id',id);
-  localStorage.setItem('uplus_pw',pw);
-  $('log').textContent='U+ 로그인 시도중... (프록시 경유)';
-  $('autoBtn').textContent='⏳ 조회중...';
-  
-  try{
-    // Try multiple proxies - U+ site blocks CORS, so we try to fetch via proxy
-    // Note: Real U+ API endpoint is not public, this is best effort
-    // We'll try to fetch m.lguplus.com login page and parse
-    const proxies = [
-      'https://corsproxy.io/?',
-      'https://api.allorigins.win/raw?url=',
-      'https://api.codetabs.com/v1/proxy?quest='
-    ];
-    
-    // For demo, since U+ API requires complex session, we simulate with manual prompt
-    // If proxy fails, fallback to asking user to input from U+ app
-    // In real implementation, you'd reverse engineer U+ API here
-    
-    $('log').textContent='U+ API가 CORS 차단 + OTP 필요로 자동 조회 불가\n아래 방법 사용:\n1. U+ 고객센터 앱 열어서 잔량 확인\n2. 여기에 숫자 입력\n\n더 쉬운 방법: A25 리포터가 여전히 가장 정확 (실시간 측정)';
-    $('autoBtn').textContent='⚠️ U+ 자동 조회는 OTP 때문에 불가 - 수동 입력 사용';
-    
-    // Try to open U+ app
-    setTimeout(()=>{ window.location.href='uplus://'; },500);
-    
-  }catch(e){
-    $('log').textContent='오류: '+e.message+'\n수동 입력으로 전환';
-    $('autoBtn').textContent='⚡ U+ 잔량 자동 조회';
+// 탭 전환
+function switchTab(tab) {
+  if (tab === 'monitor') {
+    $('tabMonitor').classList.add('active');
+    $('tabSettings').classList.remove('active');
+    $('tabBtnMonitor').classList.add('active');
+    $('tabBtnSettings').classList.remove('active');
+  } else {
+    $('tabMonitor').classList.remove('active');
+    $('tabSettings').classList.add('active');
+    $('tabBtnMonitor').classList.remove('active');
+    $('tabBtnSettings').classList.add('active');
   }
-};
-
-// theme
-function applyTheme(t){
-  document.documentElement.setAttribute('data-theme',t);
-  localStorage.setItem('tether_theme',t);
-  $('themeToggle').textContent=t==='light'?'🌙':'☀️';
 }
-const savedTheme=localStorage.getItem('tether_theme')|| (window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');
+
+// 화면 렌더링
+function upd(left, total, src) {
+  const offset = parseFloat(localStorage.getItem('tether_offset') || '0');
+  const originalLeft = parseFloat(left);
+  if (isNaN(originalLeft)) return;
+
+  const adjustedLeft = originalLeft + offset;
+  const maxTotal = parseFloat(total) || parseFloat(localStorage.getItem('tether_total') || '30');
+
+  const pct = Math.max(0, Math.min(100, (adjustedLeft / maxTotal) * 100));
+  $('big').innerHTML = adjustedLeft.toFixed(1) + '<span class="unit">GB</span>';
+  $('sub').textContent = `${adjustedLeft.toFixed(1)}GB 남음 / ${maxTotal}GB (${Math.round(pct)}%)`;
+  $('fg').style.strokeDashoffset = CIRC * (1 - pct / 100);
+  $('fg').style.stroke = pct < 15 ? '#ef4444' : pct < 30 ? '#f59e0b' : 'var(--gauge-fg)';
+
+  localStorage.setItem('tether_left', originalLeft);
+  $('log').textContent = `[${src}] 보정: ${offset >= 0 ? '+' : ''}${offset}GB\n${new Date().toLocaleTimeString('ko-KR')} 갱신됨`;
+}
+
+// Firebase 연결
+function connectFirebase() {
+  const dbUrl = localStorage.getItem('tether_fb_db_url');
+  if (!dbUrl) {
+    $('log').textContent = '⚠️ 설정 탭에서 Firebase Database URL을 입력해 주세요.';
+    return;
+  }
+
+  try {
+    const config = {
+      databaseURL: dbUrl.trim(),
+      apiKey: (localStorage.getItem('tether_fb_api_key') || '').trim(),
+      projectId: (localStorage.getItem('tether_fb_proj_id') || '').trim()
+    };
+
+    if (firebase.apps.length > 0) {
+      firebase.app().delete().then(() => initAndListen(config));
+    } else {
+      initAndListen(config);
+    }
+  } catch (err) {
+    $('log').textContent = 'Firebase 초기화 에러: ' + err.message;
+  }
+}
+
+function initAndListen(config) {
+  try {
+    currentFirebaseApp = firebase.initializeApp(config);
+    const db = firebase.database();
+    $('log').textContent = 'Firebase 수신 대기 중...';
+
+    db.ref('tethering').on('value', snapshot => {
+      const val = snapshot.val();
+      if (val !== null && val !== undefined) {
+        const left = typeof val === 'object' ? (val.left ?? val.remain) : val;
+        const total = typeof val === 'object' ? val.total : null;
+        upd(left, total, 'Firebase 실시간');
+      }
+    }, error => {
+      $('log').textContent = 'Firebase 읽기 실패 (규칙 확인 필요): ' + error.message;
+    });
+  } catch (e) {
+    $('log').textContent = '연결 오류: ' + e.message;
+  }
+}
+
+// 설정 저장
+function saveSettings() {
+  const dbUrl = $('cfgDbUrl').value.trim();
+  const apiKey = $('cfgApiKey').value.trim();
+  const projId = $('cfgProjectId').value.trim();
+  const total = $('cfgTotal').value.trim() || '30';
+  const offset = $('cfgOffset').value.trim() || '0';
+
+  localStorage.setItem('tether_fb_db_url', dbUrl);
+  localStorage.setItem('tether_fb_api_key', apiKey);
+  localStorage.setItem('tether_fb_proj_id', projId);
+  localStorage.setItem('tether_total', total);
+  localStorage.setItem('tether_offset', offset);
+
+  $('cfgLog').textContent = '✅ 설정이 저장되었습니다. 모니터를 갱신합니다.';
+  connectFirebase();
+
+  const sl = localStorage.getItem('tether_left');
+  if (sl) upd(sl, total, '설정 변경');
+
+  setTimeout(() => switchTab('monitor'), 800);
+}
+
+// 테마 토글
+function applyTheme(t) {
+  document.documentElement.setAttribute('data-theme', t);
+  localStorage.setItem('tether_theme', t);
+  $('themeToggle').textContent = t === 'light' ? '🌙' : '☀️';
+}
+const savedTheme = localStorage.getItem('tether_theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
 applyTheme(savedTheme);
-$('themeToggle').onclick=()=>{
-  const cur=document.documentElement.getAttribute('data-theme');
-  applyTheme(cur==='light'?'dark':'light');
+$('themeToggle').onclick = () => {
+  applyTheme(document.documentElement.getAttribute('data-theme') === 'light' ? 'dark' : 'light');
 };
 
-// load
-const uidSaved=localStorage.getItem('uplus_id');
-if(uidSaved) $('uid').value=uidSaved;
-const pwSaved=localStorage.getItem('uplus_pw');
-if(pwSaved) $('pw').value=pwSaved;
+// 초기화
+window.addEventListener('DOMContentLoaded', () => {
+  $('cfgDbUrl').value = localStorage.getItem('tether_fb_db_url') || '';
+  $('cfgApiKey').value = localStorage.getItem('tether_fb_api_key') || '';
+  $('cfgProjectId').value = localStorage.getItem('tether_fb_proj_id') || '';
+  $('cfgTotal').value = localStorage.getItem('tether_total') || '30';
+  $('cfgOffset').value = localStorage.getItem('tether_offset') || '0';
 
-const lp=getParam('left'), tp=getParam('total');
-if(lp) upd(lp, tp||'30', 'URL 파라미터');
-else {
-  const sl=localStorage.getItem('tether_left'), st=localStorage.getItem('tether_total');
-  if(sl) upd(sl, st, '저장된 값');
-}
+  const lp = getParam('left'), tp = getParam('total');
+  if (lp) {
+    upd(lp, tp || '30', 'URL 파라미터');
+  } else {
+    const sl = localStorage.getItem('tether_left');
+    if (sl) upd(sl, localStorage.getItem('tether_total') || '30', '저장된 캐시');
+  }
+
+  connectFirebase();
+});
 </script>
-<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script>
-
-</body></html>
+</body>
+</html>
