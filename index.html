@@ -1,4 +1,4 @@
-<html lang="ko" data-theme="light"><head><style>
+<html lang="ko" data-theme="dark"><head><style>
 @font-face {
   font-family: "Optimistic";
   font-style: normal;
@@ -23,7 +23,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Tether Meter v1.5</title>
+<title>Tether Meter v1.7</title>
 <style>
 :root{--bg:#0a0a0a;--card:#151515;--card-b:#222;--text:#fff;--sub:#999;--muted:#666;--gauge-bg:#1a1a1a;--gauge-fg:#fff;--input-bg:#0a0a0a;--input-b:#2a2a2a;--btn-bg:#fff;--btn-c:#000}
 [data-theme="light"]{--bg:#f5f5f7;--card:#fff;--card-b:#e5e5ea;--text:#111;--sub:#666;--muted:#999;--gauge-bg:#e5e5ea;--gauge-fg:#111;--input-bg:#fff;--input-b:#d1d1d6;--btn-bg:#111;--btn-c:#fff}
@@ -44,8 +44,8 @@ h1{font-size:11px;letter-spacing:3px;color:var(--muted);margin:8px 0 14px}
 /* 원형 게이지 */
 .gauge-wrap{position:relative;width:290px;height:290px;margin:10px 0}
 svg{transform:rotate(-90deg);width:100%;height:100%}
-.bg{fill:none;stroke:var(--gauge-bg);stroke-width:18}
-.fg{fill:none;stroke:var(--gauge-fg);stroke-width:18;stroke-linecap:round;transition:stroke-dashoffset 0.8s ease}
+.bg{fill:none;stroke:var(--gauge-bg);stroke-width:18;opacity:0.9}
+.fg{fill:none;stroke:var(--gauge-fg);stroke-width:20;stroke-linecap:round;transition:stroke-dashoffset 0.8s ease}
 .center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 .big{font-size:56px;font-weight:900;letter-spacing:-2px;line-height:1}
 .unit{font-size:18px;color:var(--sub)}
@@ -77,8 +77,8 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
 <body>
-<button id="themeToggle">🌙</button>
-<h1>TETHER METER v1.5</h1>
+<button id="themeToggle">☀️</button>
+<h1>TETHER METER v1.7</h1>
 
 <div class="tabs">
   <button id="tabBtnMonitor" class="tab-btn active" onclick="switchTab('monitor')">📊 모니터</button>
@@ -91,7 +91,7 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
   <div class="gauge-wrap">
     <svg viewBox="0 0 200 200">
       <circle class="bg" cx="100" cy="100" r="85"></circle>
-      <circle id="fg" class="fg" cx="100" cy="100" r="85" stroke-dasharray="534" stroke-dashoffset="534" style="stroke-dashoffset: 0px; stroke: var(--gauge-fg);"></circle>
+      <circle id="fg" class="fg" cx="100" cy="100" r="85" stroke-dasharray="534.0707511102648" stroke-dashoffset="0" style="stroke-dasharray: 534.070751; stroke-dashoffset: 0px; stroke: rgb(255, 255, 255);"></circle>
     </svg>
     <div class="center">
       <div id="big" class="big">80.00<span class="unit">GB</span></div>
@@ -101,12 +101,12 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
   <div class="card" id="dailyCard">
     <h2>📅 오늘 사용 가이드</h2>
     <div class="daily-row"><span>오늘 허용량</span><b id="dailyBudget">6.67GB</b></div>
-    <div class="daily-row"><span>오늘 사용량</span><b id="dailyUsed">0MB (0%)</b></div>
+    <div class="daily-row"><span>오늘 사용량</span><b id="dailyUsed">0MB (0%) *</b></div>
     <div class="daily-row"><span>오늘 남은 허용량</span><b id="dailyLeft">6.67GB 남음</b></div>
     <div class="daily-row"><span>이달 남은 일수</span><b id="dailyDaysLeft">12일 (오늘 포함)</b></div>
     <div class="daily-row"><span>상태</span><b id="dailyStatus" class="daily-ok">✅ 정상 범위</b></div>
     <div id="dailyAlert" class="daily-alert" style="background: rgb(239, 68, 68);"></div>
-    <div class="daily-note">허용량 = 남은 데이터 ÷ 이달 남은 일수(오늘 포함)<br>오늘 사용량이 허용량을 넘으면 경고가 표시됩니다.</div>
+    <div class="daily-note">허용량 = 남은 데이터 ÷ 이달 남은 일수(오늘 포함)<br>오늘 사용량이 허용량을 넘으면 경고가 표시됩니다.<br>* 표시: 전날 기록이 없어 오늘 첫 접속값부터 계산됨 (정확도를 높이려면 앱을 매일 저녁에 한 번씩 열어두세요)</div>
   </div>
   <div class="card">
     <div id="log" class="log">⚠️ 설정 탭에서 Firebase Database URL을 입력해 주세요.</div>
@@ -190,22 +190,34 @@ function getTodayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-// 오늘 시작 시점 A25 값: 날짜가 바뀌면 그날 첫 값으로 초기화
+// [v1.6 수정] 오늘 시작값 버그 수정
+// 문제: 날짜가 바뀌면 그날 첫 접속값을 시작값으로 삼아서, 그 전에 쓴 오늘 사용량이 0이 됨
+// 수정: 전날 마지막으로 본 값을 오늘 시작값으로 사용. 전날 기록이 없으면(오래 안 열었으면) 어쩔 수 없이 현재값을 시작값으로 쓰되, 그 경우 오늘 사용량은 0부터 시작한다는 걸 표시한다.
 function getTodayUsed(currentA25) {
   const today = getTodayKey();
   const savedDay = localStorage.getItem('tether_daily_day');
   let start = parseFloat(localStorage.getItem('tether_daily_start') || 'NaN');
   if (savedDay !== today || isNaN(start)) {
+    const lastSeen = parseFloat(localStorage.getItem('tether_last_seen_a25') || 'NaN');
+    const lastSeenDay = localStorage.getItem('tether_last_seen_day') || '';
+    // 전날에 본 기록이 있으면 그 값을 오늘 시작값으로 (오늘 00시와 가장 가까운 값)
+    const useLastSeen = !isNaN(lastSeen) && lastSeenDay && lastSeenDay !== today && lastSeen <= currentA25;
+    const newStart = useLastSeen ? lastSeen : currentA25;
     localStorage.setItem('tether_daily_day', today);
-    localStorage.setItem('tether_daily_start', String(currentA25));
-    return 0;
+    localStorage.setItem('tether_daily_start', String(newStart));
+    localStorage.setItem('tether_daily_start_is_estimate', useLastSeen ? '0' : '1');
+    return Math.max(0, currentA25 - newStart);
   }
-  // 기기 재설치/데이터 리셋 등으로 현재값이 시작값보다 작아지면 시작값 보정
   if (currentA25 < start) {
     localStorage.setItem('tether_daily_start', String(currentA25));
     return 0;
   }
   return Math.max(0, currentA25 - start);
+}
+function saveLastSeen(currentA25) {
+  // 매 렌더마다 마지막으로 본 값을 저장해둔다. 내일 시작값으로 쓴다.
+  localStorage.setItem('tether_last_seen_a25', String(currentA25));
+  localStorage.setItem('tether_last_seen_day', getTodayKey());
 }
 function renderDaily(left, total, currentA25) {
   const daysLeft = getDaysLeftInMonth();
@@ -215,7 +227,8 @@ function renderDaily(left, total, currentA25) {
   const over = todayUsed > budget;
   const pctUsed = budget > 0 ? (todayUsed / budget) * 100 : 0;
   $('dailyBudget').textContent = budget.toFixed(2) + 'GB';
-  $('dailyUsed').textContent = (todayUsed * 1024 < 1000 ? (todayUsed*1024).toFixed(0)+'MB' : todayUsed.toFixed(2)+'GB') + ' (' + pctUsed.toFixed(0) + '%)';
+  const isEst = localStorage.getItem('tether_daily_start_is_estimate') === '1';
+  $('dailyUsed').textContent = (todayUsed * 1024 < 1000 ? (todayUsed*1024).toFixed(0)+'MB' : todayUsed.toFixed(2)+'GB') + ' (' + pctUsed.toFixed(0) + '%)' + (isEst ? ' *' : '');
   $('dailyLeft').textContent = (dailyLeft >= 0 ? dailyLeft.toFixed(2)+'GB 남음' : Math.abs(dailyLeft).toFixed(2)+'GB 초과');
   $('dailyLeft').style.color = dailyLeft >= 0 ? '' : '#ef4444';
   $('dailyDaysLeft').textContent = daysLeft + '일 (오늘 포함)';
@@ -254,14 +267,21 @@ function renderGauge(a25Used, src) {
   // 소수점 2자리로 표기하여 10~50MB 단위 사용도 바로 보이도록 수정
   $('big').innerHTML = left.toFixed(2) + '<span class="unit">GB</span>';
   $('sub').textContent = `${left.toFixed(2)}GB 남음 / ${total}GB (${pct.toFixed(1)}%)`;
-  $('fg').style.strokeDashoffset = CIRC * (1 - pct / 100);
-  $('fg').style.stroke = pct < 15 ? '#ef4444' : pct < 30 ? '#f59e0b' : 'var(--gauge-fg)';
+  // [v1.7 수정] 게이지 = 남은 양(pct)만큼만 호를 그린다. 아래 숫자(8.30GB)와 게이지가 반드시 일치해야 한다.
+  const fgEl = $('fg');
+  fgEl.style.strokeDasharray = String(CIRC);
+  fgEl.style.strokeDashoffset = String(CIRC * (1 - pct / 100));
+  // 남은 양이 적을수록 빨강/주황으로 확 보이게
+  fgEl.style.stroke = pct < 15 ? '#ef4444' : pct < 30 ? '#f59e0b' : '#ffffff';
+  fgEl.setAttribute('stroke-dasharray', String(CIRC));
+  fgEl.setAttribute('stroke-dashoffset', String(CIRC * (1 - pct / 100)));
 
   localStorage.setItem('tether_a25_used', currentA25Used);
   
   const a25Mb = currentA25Used * 1024.0;
   const a25Text = a25Mb < 1000 ? `${a25Mb.toFixed(0)}MB` : `${currentA25Used.toFixed(2)}GB`;
   
+  saveLastSeen(currentA25Used);
   renderDaily(left, total, currentA25Used);
   $('log').textContent = `📡 A25 측정: ${a25Text} | 기사용 보정: ${offset.toFixed(1)}GB\n총 사용량: ${totalUsed.toFixed(2)}GB (${new Date().toLocaleTimeString('ko-KR')} 갱신됨)`;
 }
