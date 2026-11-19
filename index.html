@@ -23,7 +23,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Tether Meter v1.7</title>
+<title>Tether Meter v1.8</title>
 <style>
 :root{--bg:#0a0a0a;--card:#151515;--card-b:#222;--text:#fff;--sub:#999;--muted:#666;--gauge-bg:#1a1a1a;--gauge-fg:#fff;--input-bg:#0a0a0a;--input-b:#2a2a2a;--btn-bg:#fff;--btn-c:#000}
 [data-theme="light"]{--bg:#f5f5f7;--card:#fff;--card-b:#e5e5ea;--text:#111;--sub:#666;--muted:#999;--gauge-bg:#e5e5ea;--gauge-fg:#111;--input-bg:#fff;--input-b:#d1d1d6;--btn-bg:#111;--btn-c:#fff}
@@ -78,7 +78,7 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
 </head>
 <body>
 <button id="themeToggle">☀️</button>
-<h1>TETHER METER v1.7</h1>
+<h1>TETHER METER v1.8</h1>
 
 <div class="tabs">
   <button id="tabBtnMonitor" class="tab-btn active" onclick="switchTab('monitor')">📊 모니터</button>
@@ -101,12 +101,12 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
   <div class="card" id="dailyCard">
     <h2>📅 오늘 사용 가이드</h2>
     <div class="daily-row"><span>오늘 허용량</span><b id="dailyBudget">6.67GB</b></div>
-    <div class="daily-row"><span>오늘 사용량</span><b id="dailyUsed">0MB (0%) *</b></div>
+    <div class="daily-row"><span>오늘 사용량</span><b id="dailyUsed">자정값 없음</b></div>
     <div class="daily-row"><span>오늘 남은 허용량</span><b id="dailyLeft">6.67GB 남음</b></div>
     <div class="daily-row"><span>이달 남은 일수</span><b id="dailyDaysLeft">12일 (오늘 포함)</b></div>
     <div class="daily-row"><span>상태</span><b id="dailyStatus" class="daily-ok">✅ 정상 범위</b></div>
     <div id="dailyAlert" class="daily-alert" style="background: rgb(239, 68, 68);"></div>
-    <div class="daily-note">허용량 = 남은 데이터 ÷ 이달 남은 일수(오늘 포함)<br>오늘 사용량이 허용량을 넘으면 경고가 표시됩니다.<br>* 표시: 전날 기록이 없어 오늘 첫 접속값부터 계산됨 (정확도를 높이려면 앱을 매일 저녁에 한 번씩 열어두세요)</div>
+    <div id="dailyNote" class="daily-note">시작점: 자정(00:00) 기준<br>자정값 없음 - 전날 저녁에 앱을 열어두면 내일부터 자정 기준으로 잡힘</div>
   </div>
   <div class="card">
     <div id="log" class="log">⚠️ 설정 탭에서 Firebase Database URL을 입력해 주세요.</div>
@@ -190,9 +190,9 @@ function getTodayKey() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
 }
-// [v1.6 수정] 오늘 시작값 버그 수정
-// 문제: 날짜가 바뀌면 그날 첫 접속값을 시작값으로 삼아서, 그 전에 쓴 오늘 사용량이 0이 됨
-// 수정: 전날 마지막으로 본 값을 오늘 시작값으로 사용. 전날 기록이 없으면(오래 안 열었으면) 어쩔 수 없이 현재값을 시작값으로 쓰되, 그 경우 오늘 사용량은 0부터 시작한다는 걸 표시한다.
+// [v1.8] 시작점 = 자정(00:00) 기준. 말일 23:59:59까지가 한 달.
+// 웹앱은 자정에 자동 실행이 안 되므로, 전날 마지막으로 본 값을 자정값으로 쓴다.
+// 오늘 처음 연 순간의 값을 자정값으로 쓰지 않는다. 전날 기록이 없으면 오늘 사용량은 '자정값 없음'으로 표시한다.
 function getTodayUsed(currentA25) {
   const today = getTodayKey();
   const savedDay = localStorage.getItem('tether_daily_day');
@@ -200,14 +200,23 @@ function getTodayUsed(currentA25) {
   if (savedDay !== today || isNaN(start)) {
     const lastSeen = parseFloat(localStorage.getItem('tether_last_seen_a25') || 'NaN');
     const lastSeenDay = localStorage.getItem('tether_last_seen_day') || '';
-    // 전날에 본 기록이 있으면 그 값을 오늘 시작값으로 (오늘 00시와 가장 가까운 값)
-    const useLastSeen = !isNaN(lastSeen) && lastSeenDay && lastSeenDay !== today && lastSeen <= currentA25;
-    const newStart = useLastSeen ? lastSeen : currentA25;
-    localStorage.setItem('tether_daily_day', today);
-    localStorage.setItem('tether_daily_start', String(newStart));
-    localStorage.setItem('tether_daily_start_is_estimate', useLastSeen ? '0' : '1');
-    return Math.max(0, currentA25 - newStart);
+    const hasMidnight = !isNaN(lastSeen) && lastSeenDay && lastSeenDay !== today && lastSeen <= currentA25;
+    if (hasMidnight) {
+      localStorage.setItem('tether_daily_day', today);
+      localStorage.setItem('tether_daily_start', String(lastSeen));
+      localStorage.setItem('tether_daily_start_is_estimate', '0');
+      localStorage.setItem('tether_daily_start_label', lastSeenDay + ' 마지막값 = 자정 기준');
+      return Math.max(0, currentA25 - lastSeen);
+    } else {
+      // 전날 기록 없음: 오늘 처음 연 값을 자정으로 착각하지 않기 위해 시작점을 만들지 않고 -1 반환
+      localStorage.setItem('tether_daily_day', today);
+      localStorage.setItem('tether_daily_start', '');
+      localStorage.setItem('tether_daily_start_is_estimate', '1');
+      localStorage.setItem('tether_daily_start_label', '자정값 없음 - 전날 저녁에 앱을 열어두면 내일부터 자정 기준으로 잡힘');
+      return -1;
+    }
   }
+  if (isNaN(start)) return -1;
   if (currentA25 < start) {
     localStorage.setItem('tether_daily_start', String(currentA25));
     return 0;
@@ -222,13 +231,17 @@ function saveLastSeen(currentA25) {
 function renderDaily(left, total, currentA25) {
   const daysLeft = getDaysLeftInMonth();
   const budget = left / daysLeft;
-  const todayUsed = getTodayUsed(currentA25);
+  const todayUsedRaw = getTodayUsed(currentA25);
+  const noMidnight = todayUsedRaw < 0;
+  const todayUsed = noMidnight ? 0 : todayUsedRaw;
   const dailyLeft = budget - todayUsed;
   const over = todayUsed > budget;
   const pctUsed = budget > 0 ? (todayUsed / budget) * 100 : 0;
   $('dailyBudget').textContent = budget.toFixed(2) + 'GB';
   const isEst = localStorage.getItem('tether_daily_start_is_estimate') === '1';
-  $('dailyUsed').textContent = (todayUsed * 1024 < 1000 ? (todayUsed*1024).toFixed(0)+'MB' : todayUsed.toFixed(2)+'GB') + ' (' + pctUsed.toFixed(0) + '%)' + (isEst ? ' *' : '');
+  $('dailyUsed').textContent = noMidnight ? '자정값 없음' : (todayUsed * 1024 < 1000 ? (todayUsed*1024).toFixed(0)+'MB' : todayUsed.toFixed(2)+'GB') + ' (' + pctUsed.toFixed(0) + '%)';
+  const _lbl = localStorage.getItem('tether_daily_start_label') || '';
+  const _note = document.getElementById('dailyNote'); if (_note && _lbl) _note.innerHTML = '시작점: 자정(00:00) 기준<br>' + _lbl;
   $('dailyLeft').textContent = (dailyLeft >= 0 ? dailyLeft.toFixed(2)+'GB 남음' : Math.abs(dailyLeft).toFixed(2)+'GB 초과');
   $('dailyLeft').style.color = dailyLeft >= 0 ? '' : '#ef4444';
   $('dailyDaysLeft').textContent = daysLeft + '일 (오늘 포함)';
