@@ -1,10 +1,29 @@
-<!DOCTYPE html>
-<html lang="ko" data-theme="dark">
-<head>
+<html lang="ko" data-theme="light"><head><style>
+@font-face {
+  font-family: "Optimistic";
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url("/fonts/OptimisticAI_VF_Optimized.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Optimistic Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("/fonts/OptimisticMono_W_TextRegular.woff2") format("woff2");
+}
+:where(html) {
+  font-family: "Optimistic", system-ui, sans-serif;
+}
+:where(code, pre, kbd, samp) {
+  font-family: "Optimistic Mono", ui-monospace, monospace;
+}
+</style>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<title>Tether Meter v1.4</title>
+<title>Tether Meter v1.5</title>
 <style>
 :root{--bg:#0a0a0a;--card:#151515;--card-b:#222;--text:#fff;--sub:#999;--muted:#666;--gauge-bg:#1a1a1a;--gauge-fg:#fff;--input-bg:#0a0a0a;--input-b:#2a2a2a;--btn-bg:#fff;--btn-c:#000}
 [data-theme="light"]{--bg:#f5f5f7;--card:#fff;--card-b:#e5e5ea;--text:#111;--sub:#666;--muted:#999;--gauge-bg:#e5e5ea;--gauge-fg:#111;--input-bg:#fff;--input-b:#d1d1d6;--btn-bg:#111;--btn-c:#fff}
@@ -43,6 +62,14 @@ button.action-btn{width:100%;padding:14px;border:0;border-radius:12px;font-weigh
 small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height:1.5}
 .log{font-size:12px;color:var(--sub);text-align:center;margin-top:10px;white-space:pre-wrap;line-height:1.6}
 .badge{display:inline-block;background:#2563eb;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:999px;margin-bottom:6px}
+.daily-row{display:flex;justify-content:space-between;align-items:center;font-size:13px;padding:9px 0;border-bottom:1px dashed var(--card-b)}
+.daily-row:last-child{border-bottom:0}
+.daily-row b{font-size:14px}
+.daily-ok{color:#22c55e;font-weight:800}
+.daily-warn{color:#ef4444;font-weight:800}
+.daily-alert{background:#ef4444;color:#fff;border-radius:12px;padding:12px;font-size:13px;font-weight:700;text-align:center;line-height:1.5;margin-top:14px;display:none}
+.daily-alert.show{display:block}
+.daily-note{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.5;text-align:center}
 </style>
 
 <!-- Firebase SDK -->
@@ -50,8 +77,8 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
 <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 </head>
 <body>
-<button id="themeToggle">☀️</button>
-<h1>TETHER METER v1.4</h1>
+<button id="themeToggle">🌙</button>
+<h1>TETHER METER v1.5</h1>
 
 <div class="tabs">
   <button id="tabBtnMonitor" class="tab-btn active" onclick="switchTab('monitor')">📊 모니터</button>
@@ -60,19 +87,29 @@ small{color:var(--muted);font-size:11px;display:block;margin-top:6px;line-height
 
 <!-- 1. 모니터 탭 -->
 <div id="tabMonitor" class="tab-content active">
-  <span id="monthBadge" class="badge">--월 측정</span>
+  <span id="monthBadge" class="badge">11월 측정 (매월 1일 리셋)</span>
   <div class="gauge-wrap">
     <svg viewBox="0 0 200 200">
       <circle class="bg" cx="100" cy="100" r="85"></circle>
-      <circle id="fg" class="fg" cx="100" cy="100" r="85" stroke-dasharray="534" stroke-dashoffset="534"></circle>
+      <circle id="fg" class="fg" cx="100" cy="100" r="85" stroke-dasharray="534" stroke-dashoffset="534" style="stroke-dashoffset: 0px; stroke: var(--gauge-fg);"></circle>
     </svg>
     <div class="center">
-      <div id="big" class="big">--<span class="unit">GB</span></div>
-      <div id="sub" class="sub">데이터 수신 대기중</div>
+      <div id="big" class="big">80.00<span class="unit">GB</span></div>
+      <div id="sub" class="sub">80.00GB 남음 / 80GB (100.0%)</div>
     </div>
   </div>
+  <div class="card" id="dailyCard">
+    <h2>📅 오늘 사용 가이드</h2>
+    <div class="daily-row"><span>오늘 허용량</span><b id="dailyBudget">6.67GB</b></div>
+    <div class="daily-row"><span>오늘 사용량</span><b id="dailyUsed">0MB (0%)</b></div>
+    <div class="daily-row"><span>오늘 남은 허용량</span><b id="dailyLeft">6.67GB 남음</b></div>
+    <div class="daily-row"><span>이달 남은 일수</span><b id="dailyDaysLeft">12일 (오늘 포함)</b></div>
+    <div class="daily-row"><span>상태</span><b id="dailyStatus" class="daily-ok">✅ 정상 범위</b></div>
+    <div id="dailyAlert" class="daily-alert" style="background: rgb(239, 68, 68);"></div>
+    <div class="daily-note">허용량 = 남은 데이터 ÷ 이달 남은 일수(오늘 포함)<br>오늘 사용량이 허용량을 넘으면 경고가 표시됩니다.</div>
+  </div>
   <div class="card">
-    <div id="log" class="log">연결 대기중...</div>
+    <div id="log" class="log">⚠️ 설정 탭에서 Firebase Database URL을 입력해 주세요.</div>
   </div>
 </div>
 
@@ -143,6 +180,64 @@ function getMonthlyOffset() {
   return Math.abs(parseFloat(localStorage.getItem('tether_offset') || '0'));
 }
 
+
+function getDaysLeftInMonth() {
+  const d = new Date();
+  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+  return Math.max(1, lastDay - d.getDate() + 1);
+}
+function getTodayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+// 오늘 시작 시점 A25 값: 날짜가 바뀌면 그날 첫 값으로 초기화
+function getTodayUsed(currentA25) {
+  const today = getTodayKey();
+  const savedDay = localStorage.getItem('tether_daily_day');
+  let start = parseFloat(localStorage.getItem('tether_daily_start') || 'NaN');
+  if (savedDay !== today || isNaN(start)) {
+    localStorage.setItem('tether_daily_day', today);
+    localStorage.setItem('tether_daily_start', String(currentA25));
+    return 0;
+  }
+  // 기기 재설치/데이터 리셋 등으로 현재값이 시작값보다 작아지면 시작값 보정
+  if (currentA25 < start) {
+    localStorage.setItem('tether_daily_start', String(currentA25));
+    return 0;
+  }
+  return Math.max(0, currentA25 - start);
+}
+function renderDaily(left, total, currentA25) {
+  const daysLeft = getDaysLeftInMonth();
+  const budget = left / daysLeft;
+  const todayUsed = getTodayUsed(currentA25);
+  const dailyLeft = budget - todayUsed;
+  const over = todayUsed > budget;
+  const pctUsed = budget > 0 ? (todayUsed / budget) * 100 : 0;
+  $('dailyBudget').textContent = budget.toFixed(2) + 'GB';
+  $('dailyUsed').textContent = (todayUsed * 1024 < 1000 ? (todayUsed*1024).toFixed(0)+'MB' : todayUsed.toFixed(2)+'GB') + ' (' + pctUsed.toFixed(0) + '%)';
+  $('dailyLeft').textContent = (dailyLeft >= 0 ? dailyLeft.toFixed(2)+'GB 남음' : Math.abs(dailyLeft).toFixed(2)+'GB 초과');
+  $('dailyLeft').style.color = dailyLeft >= 0 ? '' : '#ef4444';
+  $('dailyDaysLeft').textContent = daysLeft + '일 (오늘 포함)';
+  const st = $('dailyStatus');
+  if (over) { st.textContent = '⚠️ 오늘 허용량 초과'; st.className = 'daily-warn'; }
+  else if (pctUsed >= 80) { st.textContent = '🟡 허용량 임박'; st.style.color = '#f59e0b'; st.className = ''; }
+  else { st.textContent = '✅ 정상 범위'; st.className = 'daily-ok'; }
+  const alertEl = $('dailyAlert');
+  if (over) {
+    alertEl.classList.add('show');
+    alertEl.textContent = '⚠️ 오늘 허용량 ' + budget.toFixed(2) + 'GB를 ' + Math.abs(dailyLeft).toFixed(2) + 'GB 초과했어요. 남은 기간을 위해 오늘은 사용을 줄여주세요.';
+  } else if (pctUsed >= 80) {
+    alertEl.classList.add('show');
+    alertEl.style.background = '#f59e0b';
+    alertEl.textContent = '🟡 오늘 허용량의 ' + pctUsed.toFixed(0) + '%를 사용했어요. 조금만 더 아껴 쓰면 남은 기간을 여유 있게 쓸 수 있어요.';
+  } else {
+    alertEl.classList.remove('show');
+    alertEl.style.background = '#ef4444';
+  }
+  return {budget, todayUsed, dailyLeft, over};
+}
+
 // 화면 렌더링 (소수점 2자리 정밀 표기)
 function renderGauge(a25Used, src) {
   $('monthBadge').textContent = `${new Date().getMonth() + 1}월 측정 (매월 1일 리셋)`;
@@ -167,6 +262,7 @@ function renderGauge(a25Used, src) {
   const a25Mb = currentA25Used * 1024.0;
   const a25Text = a25Mb < 1000 ? `${a25Mb.toFixed(0)}MB` : `${currentA25Used.toFixed(2)}GB`;
   
+  renderDaily(left, total, currentA25Used);
   $('log').textContent = `📡 A25 측정: ${a25Text} | 기사용 보정: ${offset.toFixed(1)}GB\n총 사용량: ${totalUsed.toFixed(2)}GB (${new Date().toLocaleTimeString('ko-KR')} 갱신됨)`;
 }
 
@@ -276,5 +372,5 @@ window.addEventListener('DOMContentLoaded', () => {
   connectFirebase();
 });
 </script>
-</body>
-</html>
+<script>(function(){var loc=location.href.replace(/#.*$/,"");var ATTR_NAMES=["data-product-id","data-productid","data-product_id","product-id","productid","product_id","data-source-entity-id","source-entity-id","source_entity_id","data-product","data-metadata","data-meta"];var DATASET_KEYS=["productId","productid","product_id","sourceEntityId","sourceentityid","source_entity_id","product","metadata","meta"];function readProductId(value){if(typeof value!=="string"||value.length===0)return null;if(/^[0-9]{6,}$/.test(value))return value;var match=value.match(/(?:product(?:_|-)?id|source(?:_|-)?entity(?:_|-)?id)["'=:\s]+([0-9]{6,})/i);return match?match[1]:null}function extractProductId(start){for(var node=start;node&&node!==document.body;node=node.parentElement){for(var i=0;i<ATTR_NAMES.length;i++){var attrValue=node.getAttribute&&node.getAttribute(ATTR_NAMES[i]);var attrProductId=readProductId(attrValue);if(attrProductId)return attrProductId}var dataset=node.dataset||null;if(dataset){for(var j=0;j<DATASET_KEYS.length;j++){var dataValue=dataset[DATASET_KEYS[j]];var dataProductId=readProductId(dataValue);if(dataProductId)return dataProductId}}}return null}function isInlineMediaSlotElement(node){return !!(node&&node.getAttribute&&node.getAttribute("data-clippy-inline-media-slot")!==null)}function findInlineMediaSlot(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(isInlineMediaSlotElement(node))return node}return null}function readInlineMediaUrl(node){if(!node)return null;return node.getAttribute&&((node.getAttribute("data-clippy-inline-media-url")||node.getAttribute("data-url")||node.getAttribute("data_url")))||node.href||null}function stripHash(url){return String(url).replace(/#.*$/,"")}function urlsMatch(a,b){if(!a||!b)return false;try{return stripHash(new URL(a,loc).href)===stripHash(new URL(b,loc).href)}catch(_){return stripHash(a)===stripHash(b)}}function isFirstPartyReelUrl(value){try{var url=new URL(value,loc);if(url.protocol!=="https:")return false;var host=url.hostname.toLowerCase();var supported=host==="instagram.com"||host.endsWith(".instagram.com")||host==="facebook.com"||host.endsWith(".facebook.com");return supported&&/\/reels?\//i.test(url.pathname)}catch(_){return false}}function isInlineMediaUrlClick(node,href){var slot=findInlineMediaSlot(node);if(!slot)return false;var slotUrl=readInlineMediaUrl(slot);if(slotUrl)return urlsMatch(href,slotUrl);return isFirstPartyReelUrl(href)}function findDataHref(start){for(var node=start;node&&node!==document.body;node=node.parentElement){if(node.getAttribute){var href=node.getAttribute("data-href")||node.getAttribute("data-url");if(href)return{href:href,node:node}}}return null}var nativeOpen=window.open;window.open=function(url){if(parent!==window&&typeof url==="string"&&/^https?:\/\//.test(url)){parent.postMessage({type:"ecto:usercontent-link-click",href:url},"*");return null}return nativeOpen?nativeOpen.apply(window,arguments):null};document.addEventListener("click",function(e){var target=e.target instanceof Element?e.target:null;if(!target)return;if(parent===window)return;var a=target.closest?target.closest("a[href]"):null;if(a&&a.href&&/^https?:\/\//.test(a.href)&&a.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(a,a.href))return;var productId=extractProductId(target)||extractProductId(a);if(productId){e.preventDefault();parent.postMessage({type:"ecto-artifact-link-click",productId:productId},"*");return}e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:a.href},"*");return}var dataHref=findDataHref(target);if(dataHref&&/^https?:\/\//.test(dataHref.href)&&dataHref.href.replace(/#.*$/,"")!==loc){if(isInlineMediaUrlClick(dataHref.node,dataHref.href))return;e.preventDefault();parent.postMessage({type:"ecto:usercontent-link-click",href:dataHref.href},"*")}},true)})();</script><script>(function(){var FOCUS_TYPE="ecto:artifact-focus-request";var CLOSE_TYPE="ecto:artifact-close-request";function focusArtifactDocument(){var body=document.body;if(!body)return;try{window.focus();}catch(e){}if(!body.hasAttribute("tabindex"))body.setAttribute("tabindex","-1");try{body.focus({preventScroll:true});}catch(e){try{body.focus();}catch(e2){}}}window.addEventListener("message",function(event){if(event.source!==window.parent)return;var data=event.data;if(!data||typeof data!=="object"||data.type!==FOCUS_TYPE)return;if(document.readyState==="loading"){document.addEventListener("DOMContentLoaded",focusArtifactDocument,{once:true});return;}focusArtifactDocument();});window.addEventListener("keydown",function(event){if(event.key!=="Escape")return;window.setTimeout(function(){if(event.defaultPrevented)return;window.parent.postMessage({type:CLOSE_TYPE},"*");},0);});})();</script>
+</body></html>
